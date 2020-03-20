@@ -1,3 +1,4 @@
+Attribute VB_Name = "Macros"
 'Main module
 
 Option Explicit
@@ -11,6 +12,8 @@ Dim ez_sales_tax As Currency
 Dim ez_cater As Currency
 Dim mm_sales_tax As Currency
 Dim mm_cater As Currency
+
+Dim adj_to_dd As Boolean
 
 Dim todays_date As Date
 
@@ -30,6 +33,7 @@ Sub Moe_Macro_Main()
     Dim issue_num As Integer
     
     Dim issue_2_present As Boolean
+    Dim issue_3_present As Boolean
     Dim issue_4_present As Boolean
     
     row_counter = 0
@@ -62,33 +66,56 @@ Sub Moe_Macro_Main()
             Call fill_dictionary_rows
             Call fill_dictionary_values(cur_date_col)
             Call reset_entries
+            Call dd_or_ue
+            
+            issue_num = 0
             
             'Start going through journal entries
             Call get_present_entries
             
             issue_4_present = check_issue_4
             
+            If (entries(3) = True) Then
+                Call dd_entry
+            End If
+            
+            If (entries(4) = True) Then
+                Call ue_entry
+            End If
+            
+            'Monkey Media and EZ Catering present
             If (entries(1) = True And entries(2) = True) Then
                 issue_num = 1
                 MsgBox ("Both EZ Catering receivables and MM receivables are present for " & todays_date & ". Must adjust entries as a result")
                 Call ez_catering_entry(cur_date_col, issue_num)
                 Call mm_entry(cur_date_col, issue_num)
                 Call mj_entry(cur_date_col, issue_num)
+            
+            'Monkey Media Present only
             ElseIf (entries(1) = True And entries(2) = False) Then
                 issue_2_present = check_issue_2
+                issue_3_present = check_issue_3
                 
-                If (issue_2_present = True And issue_4_present = False) Then
-                    MsgBox ("Must check Monkey Media website because MM a/r are less than the catering gross amount on " & todays_date)
+                If (issue_2_present = True And issue_4_present = False And issue_3_present = False) Then
+                    MsgBox ("Must check Monkey Media website because MM a/r are less than or greater than the catering gross amount on " & todays_date)
                     issue_num = 2
-                ElseIf (issue_2_present = False And issue_4_present = True) Then
-                    MsgBox ("Must check website because Cash O/S (w/Tips) is suspiciously high (over 30 dollars) for the date of " & todays_date)
+                    Call mm_entry(cur_date_col, issue_num)
+                ElseIf (issue_2_present = False And issue_4_present = True And issue_3_present = False) Then
+                    MsgBox ("Must check MM website because Cash O/S (W/Tips) is suspiciously high (over 30 dollars) for the date of " & todays_date)
                     issue_num = 4
+                    Call mm_entry(cur_date_col, issue_num)
+                ElseIf (issue_2_present = False And issue_4_present = False And issue_3_present = True) Then
+                    MsgBox ("MM a/r is greater than the total catering amount on " & todays_date & ". Making appropriate adjustments!")
+                    issue_num = 3
+                    Call mm_entry(cur_date_col, issue_num)
                 ElseIf (issue_2_present = True And issue_4_present = True) Then
-                    MsgBox ("BOTH ISSUES 2 AND 4 ARE PRESENT FOR " & todays_date)
+                    MsgBox ("Cash O/S (w/Tips) and MM A/R is less than total catering amount for " & todays_date)
                     issue_num = 2
+                    Call mm_entry(cur_date_col, issue_num)
+                ElseIf (issue_2_present = False And issue_4_present = False And issue_3_present = False) Then
+                    MsgBox ("All issues are non existant with MM present")
                 End If
                 
-                Call mm_entry(cur_date_col, issue_num)
                 Call mj_entry(cur_date_col, issue_num)
                 
             ElseIf (entries(1) = False And entries(2) = True) Then
@@ -98,23 +125,17 @@ Sub Moe_Macro_Main()
                 End If
                 
                 Call ez_catering_entry(cur_date_col, issue_num)
+                Call mj_entry(cur_date_col, issue_num)
             ElseIf (entries(1) = False And entries(2) = False) Then
-                
+            
                 If (issue_4_present = True) Then
                     issue_num = 4
                     MsgBox ("Must check website because Cash O/S (w/Tips) is suspiciously high (over 30 dollars) for the date of " & todays_date)
                 End If
                 
                 Call mj_entry(cur_date_col, issue_num)
-                End If
-                
-            If (entries(3) = True) Then
-                Call dd_entry
             End If
-            
-            If (entries(4) = True) Then
-                Call ue_entry
-            End If
+
         End If
     Next
     
@@ -133,10 +154,12 @@ Sub mj_entry(cur_date, issue_num)
     
     'Possible rows needed
     Dim mm_cater As Integer
+    Dim ez_cater As Integer
     Dim alt_cater As Integer
     
     mm_cater = dictionary_rows("MM Catering")
     alt_cater = dictionary_rows("Alt Total Catering")
+    ez_cater = dictionary_rows("Catering (EZ)")
     
     'All rows required indeces
     Dim cd As Integer
@@ -208,15 +231,24 @@ Sub mj_entry(cur_date, issue_num)
     rows_required(16) = ez_tips
     
     'issue_num = 0... no issue just take catering straight from the sheet
+    If (issue_num = 0) Then
+        row_objects(cater).is_debit = False
+    End If
     
     'Catering is not required because catering is put into the monkey media entries and ez catering entries
-    If (issue_num = 1) Then
-        row_objects(cater).currency_value = 0
+    If (issue_num = 1 Or issue_num = 3) Then
+        row_objects(cater).currency_value = row_objects(cater).currency_value - (row_objects(ez_cater).currency_value + row_objects(mm_cater).currency_value)
+        'row_objects(cater).currency_value = 0
     
     'Catering is subtracted from overall catering - mm_cater
     ElseIf (issue_num = 2) Then
         temp_cater = row_objects(cater).currency_value - row_objects(mm_cater).currency_value
         row_objects(alt_cater).currency_value = temp_cater
+    End If
+    
+    'If only EZ Catering is present then it does not appear in the main journal entry
+    If (entries(1) = False And entries(2) = True) Then
+        row_objects(cater).currency_value = row_objects(cater).currency_value - row_objects(ez_cater).currency_value
     End If
     
     'In this journal entry, ez tips and mm tips are debited and have account names
@@ -229,7 +261,7 @@ Sub mj_entry(cur_date, issue_num)
         Call populate_sheet(row_objects(rows_required(i)), ref_num)
     Next i
     
-    Call check_total(16, rows_required)
+    Call check_total(16, rows_required, "Main Journal Entry")
     
 End Sub
 
@@ -274,17 +306,24 @@ Sub mm_entry(date_column As Integer, issue_num As Integer)
         temp_cater = row_objects(tot_cater).currency_value - row_objects(ez_c).currency_value
         row_objects(mm_c).currency_value = temp_cater
         
+        'If this occurs, then there is a paid at register issue
+        If (row_objects(mm_c).currency_value > row_objects(mm_r).currency_value) Then
+            MsgBox ("One of the entries for Monkey Media is paid at register")
+            temp_cater = formatted_currency("Monkey Media", "Monkey Media adjusted (add all subtotal + delivery fee + delivery fee upcharge from MM website where orders are NOT paid at the register)")
+            row_objects(mm_c).currency_value = temp_cater
+        End If
+        
         'Calculating the monkey media sales tax by subtracting the new mm cater amount + mm tips from mm a/r
         temp_sales_tax = row_objects(mm_r).currency_value - (row_objects(mm_t).currency_value + row_objects(mm_c).currency_value)
         row_objects(mm_s_t).currency_value = temp_sales_tax
     
     'If catering amount > monkey media
     ElseIf (issue_num = 2) Then
-        temp_cater = formatted_currency("Monkey Media", "Monkey Media adjusted (add all subtotal + delivery fee from MM website where orders are NOT paid at the register)")
+        temp_cater = formatted_currency("Monkey Media", "Monkey Media adjusted (add all subtotal + delivery fee + delivery upcharge from MM website where orders are NOT paid at the register)")
         row_objects(mm_c).currency_value = temp_cater
         
         If (row_objects(mm_t).currency_value > 0) Then
-            MsgBox ("mm a/r = " & row_objects(mm_r).currency_value & "mm cater = " & row_objects(mm_c).currency_value)
+            'MsgBox ("mm a/r = " & row_objects(mm_r).currency_value & "mm cater = " & row_objects(mm_c).currency_value)
             
             temp_sales_tax = row_objects(mm_r).currency_value - (row_objects(mm_t).currency_value + row_objects(mm_c).currency_value)
             row_objects(mm_s_t).currency_value = temp_sales_tax
@@ -292,13 +331,19 @@ Sub mm_entry(date_column As Integer, issue_num As Integer)
             temp_sales_tax = row_objects(mm_r).currency_value - row_objects(mm_c).currency_value
             row_objects(mm_s_t).currency_value = temp_sales_tax
         End If
+    'MM Receivable > Total Catering
+    ElseIf (issue_num = 3) Then
+        row_objects(mm_c).currency_value = row_objects(tot_cater).currency_value
+        
+        temp_sales_tax = row_objects(mm_r).currency_value - (row_objects(mm_c).currency_value + row_objects(mm_t).currency_value)
+        row_objects(mm_s_t).currency_value = temp_sales_tax
     End If
     
     For i = 1 To 4
         Call populate_sheet(row_objects(rows_required(i)), ref_num)
     Next i
     
-    Call check_total(4, rows_required)
+    Call check_total(4, rows_required, "Monkey Media")
     
 End Sub
 
@@ -308,11 +353,15 @@ Sub ez_catering_entry(date_column As Integer, issue_num As Integer)
     Dim ez_t As String
     Dim ref_num As String
     
+    Dim temp_sales_tax As Currency
+    
     'Gets the indeces for these rows
     Dim ez_r_v As Integer
     Dim ez_t_v As Integer
     Dim ez_s_t As Integer
     Dim ez_c As Integer
+    Dim tot_cater As Integer
+    Dim tot_s_t As Integer
     
     Dim i As Integer
     
@@ -323,6 +372,9 @@ Sub ez_catering_entry(date_column As Integer, issue_num As Integer)
     ez_s_t = dictionary_rows("Sales Tax (EZ)")
     ez_c = dictionary_rows("Catering (EZ)")
     
+    tot_cater = dictionary_rows("+ Catering Sales (Gross)")
+    tot_s_t = dictionary_rows("+ Sales Tax")
+    
     rows_required(1) = ez_r_v
     rows_required(2) = ez_t_v
     rows_required(3) = ez_s_t
@@ -332,18 +384,31 @@ Sub ez_catering_entry(date_column As Integer, issue_num As Integer)
     
     If (issue_num = 1) Then
         MsgBox ("Please check the EZ Catering website for " & todays_date & " and input the following totals when asked.")
-        ez_sales_tax = format_currency("EZ Catering", "for total sales tax (under sales tax)")
-        ez_cater = format_currency("EZ Catering", "for total catering in ez catering (subtotal + delivery fee)")
+        ez_sales_tax = formatted_currency("EZ Catering", "for total sales tax (under sales tax)")
+        ez_cater = formatted_currency("EZ Catering", "for total catering in ez catering (Subtotal + Delivery Fee + Delivery Fee Upcharge)")
         
         row_objects(ez_s_t).currency_value = ez_sales_tax
         row_objects(ez_c).currency_value = ez_cater
+    End If
+    
+    'When EZ Catering is by itself, you must make adjusting entries to it and create an EZ Catering entry only. The catering entry will equal the
+    'Gross catering found on the sheet. To get ez catering sales tax you must find it on the website and then update the overall sales tax
+    If (entries(1) = False And entries(2) = True) Then
+        MsgBox ("Please go on Monkey Media's website for " & todays_date & " and enter in the total sales tax and catering for entries marked with EZ Catering")
+        
+        ez_cater = formatted_currency("EZ Catering", "Total subtotal (Subtotal + Delivery Fee + Delivery Upcharge)")
+        row_objects(ez_c).currency_value = ez_cater
+        
+        temp_sales_tax = formatted_currency("EZ Catering", "Sales Tax")
+        row_objects(ez_s_t).currency_value = temp_sales_tax
+        
     End If
     
     For i = 1 To 4
         Call populate_sheet(row_objects(rows_required(i)), ref_num)
     Next i
         
-    Call check_total(4, rows_required)
+    Call check_total(4, rows_required, "EZ Catering")
     
 End Sub
 
@@ -368,8 +433,8 @@ Sub dd_entry()
     rows_required(1) = dd
     rows_required(2) = dd
     
-    'If UberEATS is not a present entry... then get all the other delivery entries and add them in
-    If (entries(4) = False) Then
+    'If DoorDash is the smaller entry
+    If (adj_to_dd = True) Then
         fb = dictionary_rows("- Delivery (Foodsby)")
         gh = dictionary_rows("- Delivery (GRUBHUB)")
         pm = dictionary_rows("- Delivery (POSTMATES)")
@@ -390,7 +455,7 @@ Sub dd_entry()
     
     Call populate_sheet(row_objects(dd), ref_num)
     
-    Call check_total(2, rows_required)
+    Call check_total(2, rows_required, "Door Dash")
 End Sub
 
 Sub ue_entry()
@@ -414,17 +479,19 @@ Sub ue_entry()
     rows_required(1) = ue
     rows_required(2) = ue
     
-    'UberEATS will always add up the other delivery entries
-    fb = dictionary_rows("- Delivery (Foodsby)")
-    gh = dictionary_rows("- Delivery (GRUBHUB)")
-    pm = dictionary_rows("- Delivery (POSTMATES)")
-    one = dictionary_rows("- Delivery (Local 1)")
-    two = dictionary_rows("- Delivery (Local 2)")
+    'UberEATS has the smaller entry
+    If (adj_to_dd = False) Then
+        fb = dictionary_rows("- Delivery (Foodsby)")
+        gh = dictionary_rows("- Delivery (GRUBHUB)")
+        pm = dictionary_rows("- Delivery (POSTMATES)")
+        one = dictionary_rows("- Delivery (Local 1)")
+        two = dictionary_rows("- Delivery (Local 2)")
         
-    'Add all values to the door dash entry
-    total = row_objects(fb).currency_value + row_objects(gh).currency_value + row_objects(pm).currency_value + row_objects(one).currency_value + row_objects(two).currency_value + row_objects(ue).currency_value
-    row_objects(ue).currency_value = total
-        
+        'Add all values to the door dash entry
+        total = row_objects(fb).currency_value + row_objects(gh).currency_value + row_objects(pm).currency_value + row_objects(one).currency_value + row_objects(two).currency_value + row_objects(ue).currency_value
+        row_objects(ue).currency_value = total
+    End If
+    
     Call populate_sheet(row_objects(ue), ref_num)
     
     'Have to change the values for the door dash entry since it has multiple accounts
@@ -434,9 +501,10 @@ Sub ue_entry()
     
     Call populate_sheet(row_objects(ue), ref_num)
     
-    Call check_total(2, rows_required)
+    Call check_total(2, rows_required, "Uber EATS")
     
 End Sub
+
 
 Sub total_sales_tax()
     'Calculating the total sales tax for the day and will store it in the sheets sales tax
@@ -476,28 +544,71 @@ Sub total_food_beverage()
     
 End Sub
 
-Sub check_total(arr_length As Integer, ByRef rows_required() As Integer)
+Sub check_total(arr_length As Integer, ByRef rows_required() As Integer, entry_name As String)
     'This method will call calc_total and will correct entries if required
     Dim total As Currency
     
     Dim i As Integer
     
+    Dim c_os As Integer
+    
+    'Problem occurs in this method because for some reason total is doubled... not exactly sure why
+    
+    c_os = dictionary_rows("= Cash O/S (w/Tips)")
+    
     total = calc_total(arr_length)
     
-    'Problem occurs here... where the total for some reason is double the affected row... for now fixed it by multiplying the affected row
-    If (total > 0) Then
-        For i = 1 To 16
-            If (row_objects(rows_required(i)).currency_value * 2 = total) Then
-                If (row_objects(rows_required(i)).is_debit = False) Then
-                    row_objects(rows_required(i)).is_debit = True
-                Else
-                    row_objects(rows_required(i)).is_debit = False
-                End If
-                
-                Call readjust_sheet(row_objects(rows_required(i)))
-            Exit For
+    'If the array length is 16, it signifies that it is coming from the main journal entry
+    'Sometimes in the main journal entry, there are other entries that must be credited/debited + the cash_os so we are checking for that
+    If (arr_length > 6) Then
+        'If its just cash overshort, then just fix the debit/credit for cash overshort only
+        If (row_objects(c_os).currency_value * 2 = total) Then
+            If (row_objects(c_os).is_debit = False) Then
+                row_objects(c_os).is_debit = True
+            Else
+                row_objects(c_os).is_debit = False
             End If
-        Next i
+            
+            Call readjust_sheet(row_objects(c_os))
+        'If its more than just cash overshort, get the corresponding journal entry that has issues with it
+        Else
+            For i = 1 To arr_length
+                Dim temp_currency As Currency
+                temp_currency = 0
+                temp_currency = (row_objects(c_os).currency_value + row_objects(rows_required(i)).currency_value) * 2
+                If (temp_currency = total) Then
+                    If (row_objects(rows_required(i)).is_debit = False) Then
+                        row_objects(rows_required(i)).is_debit = True
+                        row_objects(c_os).is_debit = True
+                    Else
+                        row_objects(rows_required(i)).is_debit = False
+                        row_objects(c_os).is_debit = False
+                    End If
+                    
+                    Call readjust_sheet(row_objects(rows_required(i)))
+                    Call readjust_sheet(row_objects(c_os))
+                    Exit For
+                'Also checking to see if the entry itself equals the total amount
+                ElseIf (row_objects(rows_required(i)).currency_value * 2 = total) Then
+                    If (row_objects(rows_required(i)).is_debit = False) Then
+                        row_objects(rows_required(i)).is_debit = True
+                    Else
+                        row_objects(rows_required(i)).is_debit = False
+                    End If
+                    
+                    Call readjust_sheet(row_objects(rows_required(i)))
+                    
+                    Exit For
+                End If
+            Next i
+        End If
+    End If
+    
+    'Checks to see if the totals are incorrect still
+    total = calc_total(arr_length)
+    'If it is still incorrect, then we will display an output message to the user making them aware
+    If (total <> 0) Then
+        MsgBox ("The totals for " & entry_name & " on the " & todays_date & " is incorrect. It is off by " & total)
     End If
     
 End Sub
@@ -554,7 +665,8 @@ Function calc_total(length_row_needed As Integer) As Currency
 End Function
 
 Function check_issue_2() As Boolean
-    'This function will return a true/false value stating if issue 2 is present (mm a/r < catering gross amount)
+    'This function will return a true/false value stating if issue 2 is present (mm a/r < catering gross amount) OR
+    'mm a/r > catering gross amount
     Dim mm_a_r As Integer
     Dim tot_cater As Integer
     
@@ -573,6 +685,26 @@ Function check_issue_2() As Boolean
     
 End Function
 
+Function check_issue_3() As Boolean
+    'This function will return a true/false value stating if issue 3 is present (MM A/R > Total Catering)
+    Dim mm_a_r As Integer
+    Dim tot_cater As Integer
+    
+    Dim t_result As Boolean
+    
+    mm_a_r = dictionary_rows("- Alt Tend (Onl Cater Credit)")
+    tot_cater = dictionary_rows("+ Catering Sales (Gross)")
+    
+    If (row_objects(mm_a_r).currency_value > row_objects(tot_cater).currency_value) Then
+        t_result = True
+    Else
+        t_result = False
+    End If
+    
+    check_issue_3 = t_result
+    
+End Function
+
 Function check_issue_4() As Boolean
     'This function will return a true/false value stating if issue 4 is present (Cash O/S is over 30 dollars)
     
@@ -581,9 +713,7 @@ Function check_issue_4() As Boolean
     
     Dim t_result As Boolean
     
-    c_os = dictionary_rows("= Cash O/S (w/Tips)")
-    
-    MsgBox (row_objects(c_os).currency_value)
+    c_os = dictionary_rows("= Cash O/S (No Tips)")
     
     If (row_objects(c_os).currency_value > 30 Or row_objects(c_os).currency_value < -30) Then
         t_result = True
@@ -594,6 +724,22 @@ Function check_issue_4() As Boolean
     check_issue_4 = t_result
     
 End Function
+
+Sub dd_or_ue()
+    'This method will calculate whether door dash or uber eats gets the added funds for the extra entries that may pop up
+    Dim dd As Integer
+    Dim ue As Integer
+    
+    dd = dictionary_rows("- Delivery (DoorDash)")
+    ue = dictionary_rows("- Delivery (UberEATS)")
+    
+    If (row_objects(dd).currency_value <= row_objects(ue).currency_value) Then
+        adj_to_dd = True
+    Else
+        adj_to_dd = False
+    End If
+    
+End Sub
 
 Function formatted_currency(name_method As String, part_entering As String) As Currency
     'This function will ensure that the currency is formatted correctly and if it isn't will continue to call itself until it is entered correctly!
@@ -639,7 +785,9 @@ End Sub
 Sub populate_sheet(row_obj As RowData, ref_num As String)
     '**** This function will populate the 'Moe_Macro' sheet with appropriate values ****
     Sheets("Moe_Macro").Activate
-
+    
+    Dim ez_tips As Currency
+    
     'This will increase the rows starting at 0 and going all the way up to know if we can populate the rows
     If (row_counter = 0) Then
         row_counter = 2
@@ -654,14 +802,14 @@ Sub populate_sheet(row_obj As RowData, ref_num As String)
     'Inputting Account
     Worksheets("Moe_Macro").Range("C" & row_counter).Value2 = row_obj.account_name
     'Inputting moe_row (memo)
-    'Worksheets("Moe_Macro").Range("D" & row_counter).Value2 = moe_row
+    'Worksheets("Moe_Macro").Range("D" & row_counter).value = row_obj.row_name
     'Not inputting class
 
     'Figuring out if it is a debit or credit and depending on that will input in appropriate column
     If (row_obj.is_debit = True) Then
-        Worksheets("Moe_Macro").Range("F" & row_counter).value = row_obj.currency_value
+        Worksheets("Moe_Macro").Range("F" & row_counter).value = Abs(row_obj.currency_value)
     Else
-        Range("G" & row_counter).value = row_obj.currency_value
+        Range("G" & row_counter).value = Abs(row_obj.currency_value)
     End If
     
     If (row_obj.name <> "") Then
@@ -680,12 +828,14 @@ Sub get_present_entries()
     Dim ez_r As Integer
     Dim dd_r As Integer
     Dim ue_r As Integer
+    Dim onl_c As Integer
     
     'Getting the receivables values
     mm_r = dictionary_rows("- Alt Tend (Onl Cater Credit)")
     ez_r = dictionary_rows("- Alt Tend (EZ Cater)")
     dd_r = dictionary_rows("- Delivery (DoorDash)")
     ue_r = dictionary_rows("- Delivery (UberEATS)")
+    onl_c = dictionary_rows("- Alt Tend (Onl Cater Credit)")
     
     If (row_objects(mm_r).currency_value > 0) Then
         entries(1) = True
@@ -839,6 +989,7 @@ Sub fill_row_objects(row_object As RowData, row_number As Integer)
     
     ElseIf (row_object.row_name = "- Alt Tend (OLO)") Then
         row_objects(row_number).account_name = "1201 - Credit Cards"
+        row_objects(row_number).name = "OLO"
     
     'Needs to be altered by food and beverage and an added row
     ElseIf (row_object.row_name = "+ Food And Beverage") Then
@@ -889,6 +1040,13 @@ Sub fill_row_objects(row_object As RowData, row_number As Integer)
     ElseIf (row_object.row_name = "Alt Total Catering") Then
         row_objects(row_number).account_name = "4010 - CATERING"
         row_objects(row_number).is_debit = False
+    
+    ElseIf (row_object.row_name = "- Alt Tend (EZ Cater)") Then
+        row_objects(row_number).account_name = "1200 Accounts Receivable"
+           
     End If
     
 End Sub
+
+
+

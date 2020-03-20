@@ -1,3 +1,4 @@
+Attribute VB_Name = "FormatSheet"
 'FormatSheet Module
 
 Option Explicit
@@ -27,7 +28,7 @@ Sub create_worksheet()
     'This method will create a new worksheet based from a template file we created
     
     'Gets a template of how we want the workbook to look from the below file location
-    Dim str_template As String: str_template = "C:\Users\Owner\Documents\template_wb.xlsx"
+    Dim str_template As String: str_template = "C:\Users\egambra\Documents\template_workbook.xlsx"
     Dim wb As Workbook
     'Sets the active workbook as the workbook used currently
     Set wb = ActiveWorkbook
@@ -132,3 +133,6 @@ Sub convert_to_currency()
         End If
     Next
 End Sub
+
+
+

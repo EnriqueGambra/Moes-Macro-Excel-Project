@@ -1,3 +1,12 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "RowData"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
 'Class module:  RowData
 Private obj_row_name As String
 Private obj_account_name As String
@@ -75,3 +84,7 @@ Property Get name() As String
     'Gets the name string for the row
     name = obj_name
 End Property
+
+
+
+
