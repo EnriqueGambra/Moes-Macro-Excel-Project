@@ -1,5 +1,6 @@
 Attribute VB_Name = "Macros"
 'Main module
+'This is where all journal entries creation is stored
 
 Option Explicit
 
@@ -38,6 +39,7 @@ Sub Moe_Macro_Main()
     
     row_counter = 0
     
+    'Start date = 2 because that is the first day of the week in the sheet
     start_date_col = 2
     end_date_col = 8
     
@@ -45,13 +47,19 @@ Sub Moe_Macro_Main()
     
     Call FormatSheet.set_sh1
     
+    'Checks to see if there is a date present
     got_date = FormatSheet.has_date(sh1.Cells(1, 1).value)
     If (got_date = False) Then
         Call FormatSheet.create_date
     End If
     
-    Call get_last_row
+    'We want to know the row number of the last row on the sheet
+    last_row = get_last_row
     
+    'Delete the Moe_Macro sheet
+    Call FormatSheet.delete_sheet
+    
+    'Looking to see if we have a sheet called "Moe_Macro" if we don't, it will create that sheet
     If Not FormatSheet.moe_macro_exists("Moe_Macro") Then
         Call FormatSheet.create_worksheet
     End If
@@ -75,6 +83,7 @@ Sub Moe_Macro_Main()
             
             issue_4_present = check_issue_4
             
+            'Calling door dash and uber eats to be populated
             If (entries(3) = True) Then
                 Call dd_entry
             End If
@@ -89,53 +98,62 @@ Sub Moe_Macro_Main()
                 MsgBox ("Both EZ Catering receivables and MM receivables are present for " & todays_date & ". Must adjust entries as a result")
                 Call ez_catering_entry(cur_date_col, issue_num)
                 Call mm_entry(cur_date_col, issue_num)
-                Call mj_entry(cur_date_col, issue_num)
             
             'Monkey Media Present only
             ElseIf (entries(1) = True And entries(2) = False) Then
                 issue_2_present = check_issue_2
                 issue_3_present = check_issue_3
                 
+                'Issue 2 is present
                 If (issue_2_present = True And issue_4_present = False And issue_3_present = False) Then
-                    MsgBox ("Must check Monkey Media website because MM a/r are less than or greater than the catering gross amount on " & todays_date)
+                    MsgBox ("Must check Monkey Media website because MM a/r are less than the catering gross amount on " & todays_date)
                     issue_num = 2
                     Call mm_entry(cur_date_col, issue_num)
+                
+                'Issue 4 is present
                 ElseIf (issue_2_present = False And issue_4_present = True And issue_3_present = False) Then
                     MsgBox ("Must check MM website because Cash O/S (W/Tips) is suspiciously high (over 30 dollars) for the date of " & todays_date)
                     issue_num = 4
                     Call mm_entry(cur_date_col, issue_num)
+                
+                'Issue 3 is present
                 ElseIf (issue_2_present = False And issue_4_present = False And issue_3_present = True) Then
                     MsgBox ("MM a/r is greater than the total catering amount on " & todays_date & ". Making appropriate adjustments!")
                     issue_num = 3
                     Call mm_entry(cur_date_col, issue_num)
+                
+                'Issue 2 and 4 are present
                 ElseIf (issue_2_present = True And issue_4_present = True) Then
                     MsgBox ("Cash O/S (w/Tips) and MM A/R is less than total catering amount for " & todays_date)
                     issue_num = 2
                     Call mm_entry(cur_date_col, issue_num)
+                
+                'No issues are present! - More of a testing condition
                 ElseIf (issue_2_present = False And issue_4_present = False And issue_3_present = False) Then
                     MsgBox ("All issues are non existant with MM present")
                 End If
                 
-                Call mj_entry(cur_date_col, issue_num)
-                
+            'EZ Catering is present only
             ElseIf (entries(1) = False And entries(2) = True) Then
+                
                 If (issue_4_present = True) Then
                     issue_num = 4
                     MsgBox ("Must check website because Cash O/S (w/Tips) is suspiciously high (over 30 dollars) for the date of " & todays_date)
                 End If
                 
                 Call ez_catering_entry(cur_date_col, issue_num)
-                Call mj_entry(cur_date_col, issue_num)
+            
+            'EZ Catering and Monkey Media are NOT present
             ElseIf (entries(1) = False And entries(2) = False) Then
             
                 If (issue_4_present = True) Then
                     issue_num = 4
                     MsgBox ("Must check website because Cash O/S (w/Tips) is suspiciously high (over 30 dollars) for the date of " & todays_date)
                 End If
-                
-                Call mj_entry(cur_date_col, issue_num)
             End If
-
+            
+            'Call main journal entry after
+            Call mj_entry(cur_date_col, issue_num)
         End If
     Next
     
@@ -155,10 +173,8 @@ Sub mj_entry(cur_date, issue_num)
     'Possible rows needed
     Dim mm_cater As Integer
     Dim ez_cater As Integer
-    Dim alt_cater As Integer
     
     mm_cater = dictionary_rows("MM Catering")
-    alt_cater = dictionary_rows("Alt Total Catering")
     ez_cater = dictionary_rows("Catering (EZ)")
     
     'All rows required indeces
@@ -183,7 +199,7 @@ Sub mj_entry(cur_date, issue_num)
     Call total_food_beverage
     Call total_sales_tax
     
-    ref_num = get_reference_num("ME")
+    ref_num = get_reference_num("MJ")
     
     cd = dictionary_rows("- Cash Deposits")
     amex = dictionary_rows("Total Amex $")
@@ -216,13 +232,7 @@ Sub mj_entry(cur_date, issue_num)
     rows_required(7) = g_c
     rows_required(8) = olo_c
     rows_required(9) = f_b
-    
-    If (issue_num = 2) Then
-        rows_required(10) = alt_cater
-    Else
-        rows_required(10) = cater
-    End If
-    
+    rows_required(10) = cater
     rows_required(11) = s_t
     rows_required(12) = gc_s
     rows_required(13) = olo_t
@@ -238,12 +248,13 @@ Sub mj_entry(cur_date, issue_num)
     'Catering is not required because catering is put into the monkey media entries and ez catering entries
     If (issue_num = 1 Or issue_num = 3) Then
         row_objects(cater).currency_value = row_objects(cater).currency_value - (row_objects(ez_cater).currency_value + row_objects(mm_cater).currency_value)
-        'row_objects(cater).currency_value = 0
     
     'Catering is subtracted from overall catering - mm_cater
     ElseIf (issue_num = 2) Then
         temp_cater = row_objects(cater).currency_value - row_objects(mm_cater).currency_value
-        row_objects(alt_cater).currency_value = temp_cater
+        row_objects(cater).currency_value = temp_cater
+        'This is where we used to have alt catering...
+        row_objects(cater).is_debit = False
     End If
     
     'If only EZ Catering is present then it does not appear in the main journal entry
@@ -383,7 +394,7 @@ Sub ez_catering_entry(date_column As Integer, issue_num As Integer)
     ref_num = get_reference_num("EZ")
     
     If (issue_num = 1) Then
-        MsgBox ("Please check the EZ Catering website for " & todays_date & " and input the following totals when asked.")
+        MsgBox ("Please check the Monkey Media website for " & todays_date & " and input the following totals when asked.")
         ez_sales_tax = formatted_currency("EZ Catering", "for total sales tax (under sales tax)")
         ez_cater = formatted_currency("EZ Catering", "for total catering in ez catering (Subtotal + Delivery Fee + Delivery Fee Upcharge)")
         
@@ -665,8 +676,7 @@ Function calc_total(length_row_needed As Integer) As Currency
 End Function
 
 Function check_issue_2() As Boolean
-    'This function will return a true/false value stating if issue 2 is present (mm a/r < catering gross amount) OR
-    'mm a/r > catering gross amount
+    'This function will return a true/false value stating if issue 2 is present (mm a/r < catering gross amount)
     Dim mm_a_r As Integer
     Dim tot_cater As Integer
     
@@ -835,7 +845,6 @@ Sub get_present_entries()
     ez_r = dictionary_rows("- Alt Tend (EZ Cater)")
     dd_r = dictionary_rows("- Delivery (DoorDash)")
     ue_r = dictionary_rows("- Delivery (UberEATS)")
-    onl_c = dictionary_rows("- Alt Tend (Onl Cater Credit)")
     
     If (row_objects(mm_r).currency_value > 0) Then
         entries(1) = True
@@ -920,10 +929,11 @@ Sub fill_dictionary_values(date_column As Integer)
    
 End Sub
 
-Sub get_last_row()
+Function get_last_row()
     'Retrieves the last row in the table
-    last_row = sh1.Cells(Rows.Count, 1).End(xlUp).row
-End Sub
+    Set sh1 = ActiveWorkbook.Sheets("Table 1")
+    get_last_row = sh1.Cells(Rows.Count, 1).End(xlUp).row
+End Function
 
 Sub reset_entries()
     'This method will reset the entries array
@@ -967,12 +977,15 @@ Sub fill_row_objects(row_object As RowData, row_number As Integer)
     
     ElseIf (row_object.row_name = "- Cash Deposits") Then
         row_objects(row_number).account_name = "1005 - FNBLI"
+        row_objects(row_number).name = "CASH"
     
     ElseIf (row_object.row_name = "Total Amex $") Then
         row_objects(row_number).account_name = "1005 - FNBLI"
+        row_objects(row_number).name = "AMEX deposit"
     
     ElseIf (row_object.row_name = "Total V/MC/Discover $") Then
         row_objects(row_number).account_name = "1005 - FNBLI"
+        row_objects(row_number).name = "MC/Visa/Disc deposit"
     
     'Debit/Credit changes depending on the cash o/s
     ElseIf (row_object.row_name = "= Cash O/S (w/Tips)") Then
@@ -1036,13 +1049,9 @@ Sub fill_row_objects(row_object As RowData, row_number As Integer)
         row_objects(row_number).account_name = "1200 - Accounts Receivable"
         row_objects(row_number).name = "Monkey Media Receivables"
     
-    'Added row... for total catering when altered in main journal entry
-    ElseIf (row_object.row_name = "Alt Total Catering") Then
-        row_objects(row_number).account_name = "4010 - CATERING"
-        row_objects(row_number).is_debit = False
-    
     ElseIf (row_object.row_name = "- Alt Tend (EZ Cater)") Then
         row_objects(row_number).account_name = "1200 Accounts Receivable"
+        row_objects(row_number).name = "EZ Catering"
            
     End If
     

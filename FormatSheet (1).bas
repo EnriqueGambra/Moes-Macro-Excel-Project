@@ -70,6 +70,12 @@ Function moe_macro_exists(WorksheetName As String) As Boolean
     moe_macro_exists = ws_exists
 End Function
 
+Sub delete_sheet()
+    '**** This method will delete the moe_macro_sheet if it exists
+    If FormatSheet.moe_macro_exists("Moe_Macro") Then
+        Worksheets("Moe_Macro").Delete
+    End If
+End Sub
 Sub create_date()
     'This method would be called if there is no date column when initially clicking the macros button
     

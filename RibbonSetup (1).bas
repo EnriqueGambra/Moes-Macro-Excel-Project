@@ -11,7 +11,7 @@ Sub GetVisible(control As IRibbonControl, ByRef MakeVisible)
 Select Case control.ID
   Case "GroupA": MakeVisible = True
   Case "aButton01": MakeVisible = True
-  Case "aButton02": MakeVisible = False
+  Case "aButton02": MakeVisible = True
   Case "aButton03": MakeVisible = False
   Case "aButton04": MakeVisible = False
   Case "aButton05": MakeVisible = False
@@ -94,7 +94,7 @@ Select Case control.ID
   
   Case "GroupA": Labeling = "Moe Macro"
   Case "aButton01": Labeling = "Moe Macro"
-  Case "aButton02": Labeling = "Button"
+  Case "aButton02": Labeling = "Check Totals"
   Case "aButton03": Labeling = "Button"
   Case "aButton04": Labeling = "Button"
   Case "aButton05": Labeling = "Button"
@@ -253,7 +253,7 @@ Const Small As Integer = 0
 Select Case control.ID
     
   Case "aButton01": Size = Large
-  Case "aButton02": Size = Small
+  Case "aButton02": Size = Large
   Case "aButton03": Size = Small
   Case "aButton04": Size = Small
   Case "aButton05": Size = Small
@@ -328,7 +328,7 @@ Sub RunMacro(control As IRibbonControl)
 Select Case control.ID
   
   Case "aButton01": Application.Run "Moe_Macro_Main"
-  Case "aButton02": Application.Run "DummyMacro"
+  Case "aButton02": Application.Run "check_totals_main"
   Case "aButton03": Application.Run "DummyMacro"
   Case "aButton04": Application.Run "DummyMacro"
   Case "aButton05": Application.Run "DummyMacro"
@@ -403,7 +403,7 @@ Sub GetScreentip(control As IRibbonControl, ByRef Screentip)
 Select Case control.ID
   
   Case "aButton01": Screentip = "Run Moe Macro!"
-  Case "aButton02": Screentip = "Description"
+  Case "aButton02": Screentip = "Click to check the totals (only if you re-adjusted the already existing Moe Macro Sheet!)"
   Case "aButton03": Screentip = "Description"
   Case "aButton04": Screentip = "Description"
   Case "aButton05": Screentip = "Description"
